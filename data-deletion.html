@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Data Deletion</title>
+    <style>
+        body { font-family: Inter, Arial, sans-serif; background: #0a0a0a; color: #fff; margin: 0; }
+        .container { max-width: 800px; margin: 0 auto; padding: 24px; }
+        h1 { font-size: 1.75rem; margin-bottom: 12px; }
+        p { color: #a0a0a0; line-height: 1.6; }
+        code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background: #1a1a1a; padding: 2px 6px; border-radius: 6px; }
+        .card { background: #111; border: 1px solid rgba(255,255,255,0.1); padding: 16px; border-radius: 12px; margin-top: 16px; }
+        .btn { background: linear-gradient(135deg,#8b5cf6,#ec4899,#f59e0b); color: #fff; border: 0; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
+        .muted { color: #888; font-size: 0.9rem; }
+        .ok { color: #10b981; }
+        .err { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>User Data Deletion</h1>
+        <p>GenzAI stores minimal data on the client only (in your browser <span class="mono">localStorage</span>) to keep you signed in with Instagram and to display your recent analyses. We do not store personal data on our servers beyond temporary tokens required to communicate with Instagram Graph API during a session.</p>
+
+        <div class="card">
+            <h3>Immediate self‑service deletion</h3>
+            <p>Click the button below to disconnect Instagram and delete all GenzAI data stored in your browser.</p>
+            <button class="btn" id="delete-local">Disconnect & Delete Local Data</button>
+            <p class="muted" id="local-status"></p>
+        </div>
+
+        <div class="card">
+            <h3>Meta Data Deletion Callback</h3>
+            <p>For Facebook/Instagram data deletion requests initiated via Meta, we implement a Data Deletion Callback endpoint at <span class="mono">/api/facebook/deletion</span>. Meta will receive a <span class="mono">confirmation_code</span> and a <span class="mono">status URL</span> on request. You can check the status of a previously issued code by opening this page with the <span class="mono">?code=...</span> query parameter.</p>
+            <p id="code-line" class="muted"></p>
+        </div>
+
+        <div class="card">
+            <h3>Manual deletion</h3>
+            <p>If you’d like us to erase any server logs associated with your account, email <span class="mono">privacy@genzai.app</span> with subject “Data Deletion Request” and include your Instagram username and the <span class="mono">confirmation_code</span> (if you have one). We’ll respond within 48 hours.</p>
+        </div>
+    </div>
+
+    <script>
+        // Show confirmation code when provided
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        if (code) {
+            document.getElementById('code-line').textContent = `Status: confirmation_code=${code}`;
+        }
+
+        // Local deletion
+        const btn = document.getElementById('delete-local');
+        const statusEl = document.getElementById('local-status');
+        btn.addEventListener('click', () => {
+            try {
+                localStorage.removeItem('instagram_access_token');
+                localStorage.removeItem('instagram_user_profile');
+                localStorage.removeItem('instagram_token_data');
+                statusEl.textContent = 'Local data deleted and Instagram disconnected.';
+                statusEl.className = 'muted ok';
+            } catch (e) {
+                statusEl.textContent = 'Failed to delete local data: ' + (e?.message || 'Unknown error');
+                statusEl.className = 'muted err';
+            }
+        });
+    </script>
+</body>
+</html>
+
+
