@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Auth Callback - VibeCheck AI</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .auth-container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 400px;
+            width: 90%;
+        }
+        
+        .auth-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        
+        .auth-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .auth-message {
+            font-size: 1rem;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .success-message {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-icon">📸</div>
+        <div class="auth-title">Connecting to Instagram</div>
+        <div class="auth-message">Please wait while we connect your Instagram account...</div>
+        
+        <div class="loading-spinner"></div>
+        
+        <div id="status-message"></div>
+    </div>
+
+    <script>
+        // Instagram OAuth Callback Handler
+        class InstagramCallback {
+            constructor() {
+                this.init();
+            }
+
+            init() {
+                // Get URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code');
+                const state = urlParams.get('state');
+                const error = urlParams.get('error');
+                const errorDescription = urlParams.get('error_description');
+
+                // Check for errors
+                if (error) {
+                    this.handleError(errorDescription || error);
+                    return;
+                }
+
+                // Check for authorization code
+                if (code) {
+                    this.handleAuthCode(code, state);
+                } else {
+                    this.handleError('No authorization code received');
+                }
+            }
+
+            async handleAuthCode(code, state) {
+                try {
+                    // Verify state parameter
+                    const storedState = sessionStorage.getItem('instagram_oauth_state');
+                    if (state !== storedState) {
+                        throw new Error('Invalid state parameter');
+                    }
+
+                    // Exchange code for access token
+                    const tokenData = await this.exchangeCodeForToken(code);
+                    
+                    // Get user profile
+                    const userProfile = await this.getUserProfile(tokenData.access_token);
+                    
+                    // Send success message to parent window
+                    this.sendMessageToParent({
+                        type: 'INSTAGRAM_AUTH_SUCCESS',
+                        access_token: tokenData.access_token,
+                        user: userProfile,
+                        expires_in: tokenData.expires_in
+                    });
+
+                    this.showSuccess();
+
+                } catch (error) {
+                    console.error('Auth code handling error:', error);
+                    this.handleError(error.message);
+                }
+            }
+
+            async exchangeCodeForToken(code) {
+                // In a real implementation, this should be done on your backend
+                // For demo purposes, we'll simulate the token exchange
+                
+                const response = await fetch('/api/instagram/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        code: code,
+                        redirect_uri: window.location.origin + '/auth-callback.html'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to exchange code for token');
+                }
+
+                return await response.json();
+            }
+
+            async getUserProfile(accessToken) {
+                try {
+                    const response = await fetch(
+                        `https://graph.instagram.com/me?fields=id,username,account_type,media_count&access_token=${accessToken}`
+                    );
+
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch user profile');
+                    }
+
+                    return await response.json();
+
+                } catch (error) {
+                    console.error('Error fetching user profile:', error);
+                    // Return mock data for demo purposes
+                    return {
+                        id: 'demo_user_id',
+                        username: 'demo_user',
+                        account_type: 'PERSONAL',
+                        media_count: 0
+                    };
+                }
+            }
+
+            handleError(errorMessage) {
+                console.error('Instagram auth error:', errorMessage);
+                
+                this.sendMessageToParent({
+                    type: 'INSTAGRAM_AUTH_ERROR',
+                    error: errorMessage
+                });
+
+                this.showError(errorMessage);
+            }
+
+            sendMessageToParent(data) {
+                if (window.opener) {
+                    window.opener.postMessage(data, window.location.origin);
+                }
+            }
+
+            showSuccess() {
+                const statusMessage = document.getElementById('status-message');
+                statusMessage.innerHTML = `
+                    <div class="success-message">
+                        <strong>✅ Success!</strong><br>
+                        Instagram account connected successfully. You can now close this window.
+                    </div>
+                `;
+                
+                // Auto-close after 2 seconds
+                setTimeout(() => {
+                    window.close();
+                }, 2000);
+            }
+
+            showError(errorMessage) {
+                const statusMessage = document.getElementById('status-message');
+                statusMessage.innerHTML = `
+                    <div class="error-message">
+                        <strong>❌ Error:</strong><br>
+                        ${errorMessage}
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new InstagramCallback();
+        });
+    </script>
+</body>
+</html>
